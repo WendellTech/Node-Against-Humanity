@@ -14,10 +14,21 @@ A modern, good-looking NodeJS based Cards Against Humanity game server with supp
    npm install
    ```
 
-3. Start the server:
+3. Configure (optional):
+   Edit the `config.json` file to customize your server settings:
+   ```json
+   {
+     "allowSameNames": false,
+     "roomsFunctionality": true
+   }
+   ```
+   - `allowSameNames`: When false, prevents players with the same name from joining a lobby.
+   - `roomsFunctionality`: When true, enables the public room listing feature.
+
+4. Start the server:
    ```bash
    npm start
    ```
 
-4. Access the game:
+5. Access the game:
    - Open your browser and navigate to `http://localhost:3000`.
