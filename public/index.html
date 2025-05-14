@@ -140,6 +140,12 @@
             background-color: rgba(255,255,255,0.2);
             box-shadow: 0 0 0 3px rgba(231,76,60,0.3), inset 0 2px 5px rgba(0,0,0,0.1);
         }
+        
+        input[type="checkbox"] {
+            width: auto;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
 
         input::placeholder {
             color: rgba(255,255,255,0.5);
@@ -266,6 +272,9 @@
         #create-lobby-screen, #join-lobby-screen {
             max-width: 600px;
         }
+        #privateLobbyOptionContainer label {
+            vertical-align: middle;
+        }
 
         /* Pack Selection Styling */
         .pack-selection-area {
@@ -338,6 +347,9 @@
             padding: 20px;
             margin: 20px 0;
         }
+        
+        #lobby-settings-display p { margin-bottom: 8px; }
+
 
         #player-list ul, #scoreboard ul {
             list-style: none;
@@ -688,6 +700,29 @@
             margin-bottom: 8px;
         }
 
+        /* Public Lobbies List Styling */
+        #public-lobbies-list .lobby-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background-color: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            border-left: 3px solid var(--accent-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+         #public-lobbies-list .lobby-item div:first-child {
+            flex-grow: 1;
+         }
+
+        #public-lobbies-list .lobby-item button {
+            padding: 8px 15px;
+            font-size: 0.9rem;
+            margin-left: 10px;
+        }
+
+
         /* Responsive design */
         @media (max-width: 768px) {
             .container {
@@ -719,6 +754,15 @@
 
             .submissions-grid {
                 grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            }
+            #public-lobbies-list .lobby-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            #public-lobbies-list .lobby-item button {
+                margin-left: 0;
+                margin-top: 10px;
+                width: 100%;
             }
         }
 
@@ -858,6 +902,7 @@
             <div class="welcome-buttons">
                 <button id="showCreateLobby" class="primary">Create New Lobby</button>
                 <button id="showJoinLobby" class="secondary">Join Existing Lobby</button>
+                <button id="showFindRoomsBtn" class="primary" style="display:none;">Find Rooms</button> 
             </div>
         </div>
 
@@ -872,6 +917,10 @@
                 <div>
                     <label for="maxPlayers">Max Players:</label>
                     <input type="number" id="maxPlayers" value="10" min="3" max="20">
+                </div>
+                <div id="privateLobbyOptionContainer" style="display:none; margin-bottom: 20px;">
+                    <label for="isPrivateLobby">Make Lobby Private:</label>
+                    <input type="checkbox" id="isPrivateLobby">
                 </div>
                 <div>
                     <label>Select Card Packs:</label>
@@ -899,6 +948,19 @@
                 <button id="backToInitialJoin" class="secondary">Back</button>
             </div>
         </div>
+        
+        <!-- Find Rooms Screen -->
+        <div id="find-rooms-screen" class="screen">
+            <h2>Available Public Lobbies</h2>
+            <div id="public-lobbies-list" style="max-height: 400px; overflow-y: auto; background-color: rgba(0,0,0,0.1); padding: 15px; border-radius: var(--border-radius); margin-bottom: 20px;">
+                <!-- Lobbies will be listed here by JS -->
+            </div>
+            <div class="button-group" style="text-align:center;">
+                <button id="refreshLobbyListBtn" class="secondary">Refresh List</button>
+                <button id="backToInitialFromFindRooms" class="secondary">Back to Main Menu</button>
+            </div>
+        </div>
+
 
         <!-- Lobby Waiting Screen -->
         <div id="lobby-waiting-screen" class="screen">
@@ -910,6 +972,7 @@
                 <p>Score to Win: <span id="settingScoreToWin"></span></p>
                 <p>Max Players: <span id="settingMaxPlayers"></span></p>
                 <p>Selected Packs: <span id="settingSelectedPacks"></span></p>
+                <p id="lobbyPrivacyStatus" style="display:none;">Privacy: <span id="settingIsPrivate"></span></p>
             </div>
             
             <div id="player-list">
@@ -991,16 +1054,20 @@
             initial: document.getElementById('initial-screen'),
             createLobby: document.getElementById('create-lobby-screen'),
             joinLobby: document.getElementById('join-lobby-screen'),
+            findRooms: document.getElementById('find-rooms-screen'), // New screen
             lobbyWaiting: document.getElementById('lobby-waiting-screen'),
             game: document.getElementById('game-screen')
         };
         const playerNameInput = document.getElementById('playerName');
         const showCreateLobbyBtn = document.getElementById('showCreateLobby');
         const showJoinLobbyBtn = document.getElementById('showJoinLobby');
+        const showFindRoomsBtn = document.getElementById('showFindRoomsBtn'); // New button
         
         // Create Lobby UI
         const createLobbyScreen_scoreToWin = document.getElementById('scoreToWin');
         const createLobbyScreen_maxPlayers = document.getElementById('maxPlayers');
+        const isPrivateLobbyCheckbox = document.getElementById('isPrivateLobby'); // New checkbox
+        const privateLobbyOptionContainer = document.getElementById('privateLobbyOptionContainer'); // New container for checkbox
         const createLobbyScreen_packSelection = document.getElementById('pack-selection-create');
         const createLobbyBtn = document.getElementById('createLobbyBtn');
         const backToInitialBtn = document.getElementById('backToInitial');
@@ -1012,11 +1079,18 @@
         const joinLobbyBtn = document.getElementById('joinLobbyBtn');
         const backToInitialJoinBtn = document.getElementById('backToInitialJoin');
 
+        // Find Rooms UI
+        const publicLobbiesListDiv = document.getElementById('public-lobbies-list');
+        const refreshLobbyListBtn = document.getElementById('refreshLobbyListBtn');
+        const backToInitialFromFindRoomsBtn = document.getElementById('backToInitialFromFindRooms');
+
         // Lobby Waiting UI
         const lobbyCodeDisplay = document.getElementById('lobby-code-display');
         const settingScoreToWinDisplay = document.getElementById('settingScoreToWin');
         const settingMaxPlayersDisplay = document.getElementById('settingMaxPlayers');
         const settingSelectedPacksDisplay = document.getElementById('settingSelectedPacks');
+        const lobbyPrivacyStatusP = document.getElementById('lobbyPrivacyStatus');
+        const settingIsPrivateDisplay = document.getElementById('settingIsPrivate');
         const playerListUl = document.querySelector('#player-list ul');
         const startGameBtn = document.getElementById('startGameBtn');
         const leaveLobbyBtn = document.getElementById('leaveLobbyBtn');
@@ -1043,10 +1117,11 @@
         let currentLobbyCode = '';
         let currentHand = [];
         let selectedCardsForSubmission = [];
-        let pickN = 1; // How many cards to pick for the current black card
+        let pickN = 1; 
         let isHost = false;
         let isCzar = false;
-        let allPackData = []; // To store pack info from server {id, name, counts}
+        let allPackData = []; 
+        let configFromServer = { roomsFunctionality: true, allowSameNames: false }; // Client-side default
 
         // Helper functions
         function showScreen(screenName) {
@@ -1080,12 +1155,12 @@
             }, 100);
         }
 
-        function addMessage(text, type = 'info') { // type: info, error, success
+        function addMessage(text, type = 'info') { 
             const messageEl = document.createElement('div');
             messageEl.textContent = text;
             messageEl.className = `message ${type}`;
             messagesDiv.appendChild(messageEl);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to bottom
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; 
             if (type === 'error' || type === 'success') {
                 setTimeout(() => messageEl.remove(), 5000);
                 showToast(text, type);
@@ -1093,7 +1168,7 @@
         }
 
         function renderPackSelection(containerElement, packs) {
-            allPackData = packs; // Store for later display
+            allPackData = packs; 
             containerElement.innerHTML = '';
             
             packs.forEach(pack => {
@@ -1105,7 +1180,7 @@
                 checkbox.value = pack.id;
                 checkbox.name = 'packs';
                 checkbox.id = `pack-${pack.id}`;
-                if (pack.id === 0) checkbox.checked = true; // Default select first pack
+                if (pack.id === 0) checkbox.checked = true; 
                 
                 const label = document.createElement('label');
                 label.htmlFor = `pack-${pack.id}`;
@@ -1113,7 +1188,7 @@
                 
                 const countSpan = document.createElement('span');
                 countSpan.className = 'pack-count';
-                countSpan.textContent = `(White: ${pack.counts.white}, Black: ${pack.counts.black})`;
+                countSpan.textContent = `(W: ${pack.counts.white}, B: ${pack.counts.black})`;
                 
                 label.appendChild(countSpan);
                 packItem.appendChild(checkbox);
@@ -1121,7 +1196,6 @@
                 containerElement.appendChild(packItem);
             });
 
-            // Initialize Select All/None functionality
             selectAllPacksBtn.onclick = () => {
                 const checkboxes = containerElement.querySelectorAll('input[type="checkbox"]');
                 checkboxes.forEach(cb => cb.checked = true);
@@ -1132,6 +1206,19 @@
                 checkboxes.forEach(cb => cb.checked = false);
             };
         }
+        
+        // Server config handler
+        socket.on('serverConfig', (serverConfig) => {
+            console.log('Received server config:', serverConfig);
+            configFromServer = serverConfig;
+            if (showFindRoomsBtn) {
+                showFindRoomsBtn.style.display = configFromServer.roomsFunctionality ? 'inline-block' : 'none';
+            }
+            if (privateLobbyOptionContainer) {
+                privateLobbyOptionContainer.style.display = configFromServer.roomsFunctionality ? 'block' : 'none';
+            }
+        });
+
 
         // Event Listeners for screen navigation
         showCreateLobbyBtn.onclick = () => {
@@ -1141,8 +1228,11 @@
                 return;
             }
             showLoader('Getting available card packs...');
+            if (isPrivateLobbyCheckbox) isPrivateLobbyCheckbox.checked = false; // Reset private checkbox
+
             socket.emit('getPackList', (packs) => {
                 hideLoader();
+                allPackData = packs; // Store for later use if needed
                 renderPackSelection(createLobbyScreen_packSelection, packs);
                 showScreen('createLobby');
             });
@@ -1156,14 +1246,31 @@
             }
             showScreen('joinLobby');
         };
+
+        showFindRoomsBtn.onclick = () => {
+            currentPlayerName = playerNameInput.value.trim();
+            if (!currentPlayerName) {
+                addMessage('Please enter your name before finding rooms.', 'error');
+                return;
+            }
+            if (!configFromServer.roomsFunctionality) { 
+                addMessage('Room finding feature is currently disabled.', 'info');
+                return;
+            }
+            fetchAndDisplayPublicLobbies();
+            showScreen('findRooms');
+        };
         
         backToInitialBtn.onclick = () => showScreen('initial');
         backToInitialJoinBtn.onclick = () => showScreen('initial');
+        backToInitialFromFindRoomsBtn.onclick = () => showScreen('initial');
+
 
         // Create Lobby Logic
         createLobbyBtn.onclick = () => {
             const scoreToWin = parseInt(createLobbyScreen_scoreToWin.value);
             const maxPlayers = parseInt(createLobbyScreen_maxPlayers.value);
+            const isPrivate = configFromServer.roomsFunctionality ? isPrivateLobbyCheckbox.checked : false;
             const selectedPackCheckboxes = createLobbyScreen_packSelection.querySelectorAll('input[name="packs"]:checked');
             const selectedPackIndexes = Array.from(selectedPackCheckboxes).map(cb => parseInt(cb.value));
 
@@ -1173,7 +1280,7 @@
             }
 
             showLoader('Creating lobby...');
-            const settings = { scoreToWin, maxPlayers, selectedPackIndexes };
+            const settings = { scoreToWin, maxPlayers, selectedPackIndexes, isPrivate };
             socket.emit('createLobby', { playerName: currentPlayerName, settings }, (response) => {
                 hideLoader();
                 if (response.success) {
@@ -1188,7 +1295,7 @@
             });
         };
 
-        // Join Lobby Logic
+        // Join Lobby Logic (via code)
         joinLobbyBtn.onclick = () => {
             const lobbyCode = lobbyCodeInput.value.trim().toUpperCase();
             if (!lobbyCode) {
@@ -1201,9 +1308,12 @@
                 hideLoader();
                 if (response.success) {
                     currentLobbyCode = response.lobbyCode;
-                    isHost = false; // Player joining is not host initially
+                    isHost = false; 
                     lobbyCodeDisplay.textContent = currentLobbyCode;
                     addMessage(`Joined lobby ${currentLobbyCode}!`, 'success');
+                    if (allPackData.length === 0 && response.packList) { // Store packlist if not already available
+                        allPackData = response.packList;
+                    }
                     showScreen('lobbyWaiting');
                 } else {
                     addMessage(response.message || 'Failed to join lobby.', 'error');
@@ -1211,18 +1321,71 @@
             });
         };
         
+        // Fetch and display public lobbies
+        function fetchAndDisplayPublicLobbies() {
+            showLoader('Fetching public lobbies...');
+            socket.emit('getPublicLobbies', (lobbies) => {
+                hideLoader();
+                publicLobbiesListDiv.innerHTML = '';
+                if (lobbies && lobbies.length > 0) {
+                    lobbies.forEach(lobby => {
+                        const lobbyDiv = document.createElement('div');
+                        lobbyDiv.className = 'lobby-item'; // For styling
+
+                        const infoDiv = document.createElement('div');
+                        let packNamesStr = lobby.settings.selectedPackNames ? lobby.settings.selectedPackNames.join(', ') : 'Default';
+                        if (packNamesStr.length > 50) packNamesStr = packNamesStr.substring(0, 47) + '...';
+
+                        infoDiv.innerHTML = `
+                            <strong>${lobby.hostName}'s Lobby</strong> (Code: ${lobby.code})<br>
+                            Players: ${lobby.playerCount}/${lobby.settings.maxPlayers} | Score to Win: ${lobby.settings.scoreToWin}<br>
+                            <small>Packs: ${packNamesStr}</small>
+                        `;
+                        lobbyDiv.appendChild(infoDiv);
+
+                        const joinRoomBtn = document.createElement('button');
+                        joinRoomBtn.textContent = 'Join Lobby';
+                        joinRoomBtn.onclick = () => {
+                            showLoader('Joining lobby...');
+                            socket.emit('joinLobby', { lobbyCode: lobby.code, playerName: currentPlayerName }, (response) => {
+                                hideLoader();
+                                if (response.success) {
+                                    currentLobbyCode = response.lobbyCode;
+                                    isHost = false;
+                                    lobbyCodeDisplay.textContent = currentLobbyCode;
+                                    addMessage(`Joined lobby ${currentLobbyCode}!`, 'success');
+                                    if (allPackData.length === 0 && response.packList) {
+                                        allPackData = response.packList;
+                                    }
+                                    showScreen('lobbyWaiting');
+                                } else {
+                                    addMessage(response.message || 'Failed to join lobby.', 'error');
+                                    fetchAndDisplayPublicLobbies(); // Refresh list on fail
+                                }
+                            });
+                        };
+                        lobbyDiv.appendChild(joinRoomBtn);
+                        publicLobbiesListDiv.appendChild(lobbyDiv);
+                    });
+                } else {
+                    publicLobbiesListDiv.innerHTML = '<p style="text-align:center;">No public lobbies found. Why not create one?</p>';
+                }
+            });
+        }
+        refreshLobbyListBtn.onclick = fetchAndDisplayPublicLobbies;
+
+
         leaveLobbyBtn.onclick = () => {
-            // This will trigger disconnect on server, which should handle cleanup
             socket.disconnect(); 
-            socket.connect(); // Re-establish for new session
+            socket.connect(); 
             currentLobbyCode = '';
             isHost = false;
             isCzar = false;
+            messagesDiv.innerHTML = ''; // Clear messages
             showScreen('initial');
             addMessage('You have left the lobby.');
         };
 
-        // Start Game Logic
         startGameBtn.onclick = () => {
             if (isHost && currentLobbyCode) {
                 showLoader('Starting game...');
@@ -1230,22 +1393,21 @@
             }
         };
 
-        // Render Hand with Animation
         function renderHand(handCards) {
             currentHand = handCards;
             myHandDiv.innerHTML = '';
-            selectedCardsForSubmission = []; // Clear selection on new hand
+            selectedCardsForSubmission = []; 
             
             handCards.forEach((card, index) => {
                 const cardDiv = document.createElement('div');
                 cardDiv.className = 'card white-card';
                 cardDiv.dataset.cardId = card.id;
                 cardDiv.style.animation = `dealCard 0.3s ease forwards ${index * 0.1}s`;
-                cardDiv.style.opacity = '0'; // Start invisible, animation will fade in
+                cardDiv.style.opacity = '0'; 
                 
                 const textSpan = document.createElement('span');
                 textSpan.className = 'card-text';
-                textSpan.innerHTML = card.text; // Use innerHTML for cards with <b> etc.
+                textSpan.innerHTML = card.text; 
                 cardDiv.appendChild(textSpan);
 
                 if (card.icon) {
@@ -1257,24 +1419,20 @@
                 }
 
                 cardDiv.onclick = () => {
-                    if (isCzar || !lobbyState || lobbyState.gameState !== 'playing') return; // Can't select if Czar or not in playing state
+                    if (isCzar || !lobbyState || lobbyState.gameState !== 'playing') return; 
                     
-                    // Add animation
                     cardDiv.classList.add('flip');
                     setTimeout(() => cardDiv.classList.remove('flip'), 600);
                     
                     const alreadySelected = selectedCardsForSubmission.find(selCard => selCard.id === card.id);
                     if (alreadySelected) {
-                        // Deselect
                         selectedCardsForSubmission = selectedCardsForSubmission.filter(selCard => selCard.id !== card.id);
                         cardDiv.classList.remove('selected');
                     } else {
-                        // Select, but only up to pickN
                         if (selectedCardsForSubmission.length < pickN) {
                             selectedCardsForSubmission.push(card);
                             cardDiv.classList.add('selected');
                         } else if (pickN === 1 && selectedCardsForSubmission.length === 1) {
-                            // If pick 1, deselect old and select new
                             const oldSelectedId = selectedCardsForSubmission[0].id;
                             document.querySelector(`.white-card[data-card-id="${oldSelectedId}"]`)?.classList.remove('selected');
                             selectedCardsForSubmission = [card];
@@ -1287,19 +1445,17 @@
             });
         }
 
-        // Submit Cards Logic
         submitCardsBtn.onclick = () => {
             if (selectedCardsForSubmission.length === pickN) {
                 const cardIds = selectedCardsForSubmission.map(c => c.id);
                 socket.emit('submitCards', { lobbyCode: currentLobbyCode, cardIds });
-                submitCardsBtn.style.display = 'none'; // Hide after submitting
+                submitCardsBtn.style.display = 'none'; 
                 addMessage('Cards submitted!', 'success');
             } else {
                 addMessage(`Please select ${pickN} card(s).`, 'error');
             }
         };
         
-        // Render Black Card
         function renderBlackCard(blackCard) {
             if (!blackCard) {
                 blackCardDisplay.querySelector('.card-text').innerHTML = 'Waiting...';
@@ -1321,7 +1477,6 @@
             cardsToPickCountSpan.textContent = `Select ${pickN} card(s)`;
         }
 
-        // Render Submissions for all players (with Czar functionality)
         function renderSubmissions(submissions) {
             const submissionsGrid = submissionsArea.querySelector('.submissions-grid') || document.createElement('div');
             submissionsGrid.className = 'submissions-grid';
@@ -1355,14 +1510,12 @@
                 
                 groupDiv.appendChild(cardsContainer);
 
-                // Only the Czar can select winners
                 if (isCzar) {
                     const chooseBtn = document.createElement('button');
                     chooseBtn.className = 'choose-winner-btn';
                     chooseBtn.textContent = `Choose as Winner`;
                     chooseBtn.onclick = () => {
                         socket.emit('selectWinner', { lobbyCode: currentLobbyCode, winningPlayerId: submission.playerId });
-                        // Disable all buttons after selection
                         document.querySelectorAll('.choose-winner-btn').forEach(btn => btn.disabled = true);
                         chooseBtn.textContent = '✅ Selected as Winner';
                     };
@@ -1375,25 +1528,35 @@
             submissionsArea.appendChild(submissionsGrid);
         }
 
-        let lobbyState = null; // Store the latest lobby state
+        let lobbyState = null; 
 
-        // Socket Event Handlers
         socket.on('lobbyUpdate', (state) => {
-            hideLoader(); // Make sure to hide loader when updates received
-            lobbyState = state; // cache the state
-            currentLobbyCode = state.code; // Ensure this is always up to date
+            hideLoader(); 
+            lobbyState = state; 
+            currentLobbyCode = state.code; 
             isHost = state.hostId === socket.id;
             isCzar = state.czarId === socket.id;
 
-            // Update Lobby Waiting Screen
             if (screens.lobbyWaiting.classList.contains('active')) {
                 lobbyCodeDisplay.textContent = state.code;
                 settingScoreToWinDisplay.textContent = state.settings.scoreToWin;
                 settingMaxPlayersDisplay.textContent = state.settings.maxPlayers;
+                
                 const packNames = state.settings.selectedPackIndexes
-                    .map(idx => allPackData.find(p => p.id === idx)?.name || `Pack ${idx}`)
+                    .map(idx => {
+                        const pack = allPackData.find(p => p.id === idx);
+                        return pack ? pack.name : `Pack ${idx}`;
+                    })
                     .join(', ');
                 settingSelectedPacksDisplay.textContent = packNames || 'Default';
+
+                if (configFromServer.roomsFunctionality) {
+                    lobbyPrivacyStatusP.style.display = 'block';
+                    settingIsPrivateDisplay.textContent = state.settings.isPrivate ? 'Private' : 'Public';
+                } else {
+                    lobbyPrivacyStatusP.style.display = 'none';
+                }
+
 
                 playerListUl.innerHTML = '';
                 state.players.forEach(player => {
@@ -1406,7 +1569,7 @@
                     if (player.id === state.hostId) {
                         const hostSpan = document.createElement('span');
                         hostSpan.className = 'host-indicator';
-                        hostSpan.textContent = ' (Host)';
+                        // hostSpan.textContent = ' (Host)'; // Icon already has text
                         playerNameDiv.appendChild(hostSpan);
                     }
                     
@@ -1417,10 +1580,9 @@
                 startGameBtn.style.display = isHost ? 'block' : 'none';
             }
             
-            // Update Game Screen (if active or game started)
             if (screens.game.classList.contains('active') || state.gameState !== 'waiting') {
                 if (screens.lobbyWaiting.classList.contains('active') && state.gameState !== 'waiting') {
-                    showScreen('game'); // Transition to game screen if game started
+                    showScreen('game'); 
                 }
 
                 const me = state.players.find(p => p.id === socket.id);
@@ -1429,9 +1591,8 @@
                 
                 renderBlackCard(state.currentBlackCard);
 
-                // Player List and Scoreboard for game screen
                 scoreboardUl.innerHTML = '';
-                state.players.forEach(player => {
+                state.players.sort((a,b) => b.score - a.score).forEach(player => { // Sort by score
                     const li = document.createElement('li');
                     
                     const playerNameDiv = document.createElement('div');
@@ -1444,14 +1605,14 @@
                     if (player.id === state.czarId) {
                         const czarSpan = document.createElement('span');
                         czarSpan.className = 'czar-indicator';
-                        czarSpan.textContent = 'CZAR';
+                        // czarSpan.textContent = 'CZAR'; // Icon already has text
                         statusDiv.appendChild(czarSpan);
                     }
                     
                     if (player.hasSubmitted && player.id !== state.czarId) {
                         const submittedSpan = document.createElement('span');
                         submittedSpan.className = 'submitted-indicator';
-                        submittedSpan.textContent = 'Submitted';
+                        // submittedSpan.textContent = 'Submitted'; // Icon already has text
                         statusDiv.appendChild(submittedSpan);
                     }
                     
@@ -1460,7 +1621,7 @@
                     scoreboardUl.appendChild(li);
                 });
 
-                roundWinnerInfoDiv.style.display = 'none'; // Hide by default
+                roundWinnerInfoDiv.style.display = 'none'; 
                 gameOverInfoDiv.style.display = 'none';
                 nextRoundBtn.style.display = 'none';
 
@@ -1471,25 +1632,25 @@
                     submissionsArea.style.display = 'none';
                     
                     if (isCzar) {
-                        addMessage("You are the Card Czar! Wait for submissions.", 'info');
+                        // addMessage("You are the Card Czar! Wait for submissions.", 'info');
                     } else {
                         const mePlayer = state.players.find(p => p.id === socket.id);
                         if (mePlayer && mePlayer.hasSubmitted) {
-                           addMessage("You've submitted. Waiting for others.", 'info');
+                        //    addMessage("You've submitted. Waiting for others.", 'info');
                            submitCardsBtn.style.display = 'none';
                         } else {
-                           addMessage(`Your turn to submit ${pickN} card(s).`, 'info');
+                        //    addMessage(`Your turn to submit ${pickN} card(s).`, 'info');
                         }
                     }
                 } else if (state.gameState === 'judging') {
-                    myHandContainer.style.display = !isCzar ? 'none' : 'none';
+                    myHandContainer.style.display = !isCzar ? 'none' : 'none'; // Also hide hand for Czar during judging
                     submitCardsBtn.style.display = 'none';
                     renderSubmissions(state.roundSubmissions);
                     
                     if (isCzar) {
-                        addMessage("All cards are in! Pick a winner.", 'info');
+                        // addMessage("All cards are in! Pick a winner.", 'info');
                     } else {
-                        addMessage("Waiting for the Czar to pick a winner...", 'info');
+                        // addMessage("Waiting for the Czar to pick a winner...", 'info');
                     }
                 } else if (state.gameState === 'roundOver') {
                     myHandContainer.style.display = 'none';
@@ -1502,10 +1663,10 @@
                         `;
                         roundWinnerInfoDiv.style.display = 'block';
                     }
-                    addMessage("Round over. Next round starting soon...", 'info');
-                    if (isHost) nextRoundBtn.style.display = 'block'; // Allow host to manually advance
+                    // addMessage("Round over. Next round starting soon...", 'info');
+                    if (isHost) nextRoundBtn.style.display = 'block'; 
                 } else if (state.gameState === 'gameOver') {
-                    // Game Over logic handled by 'gameOver' event primarily
+                    // Handled by 'gameOver' event
                 }
             }
         });
@@ -1515,7 +1676,7 @@
         });
 
         socket.on('gameOver', (data) => {
-            showScreen('game'); // Ensure game screen is visible
+            showScreen('game'); 
             gameOverInfoDiv.innerHTML = `<strong>Game Over!</strong><br>${data.winnerName ? `${data.winnerName} is the winner!` : data.message || 'The game has ended.'}<br>Final Scores:`;
             const finalScoresUl = document.createElement('ul');
             data.players.sort((a,b) => b.score - a.score).forEach(p => {
@@ -1530,6 +1691,7 @@
             submissionsArea.style.display = 'none';
             submitCardsBtn.style.display = 'none';
             roundWinnerInfoDiv.style.display = 'none';
+            nextRoundBtn.style.display = 'none';
             document.getElementById('black-card-display').innerHTML = '<span class="card-text">GAME OVER</span>';
             
             addMessage("Game over! Check the final scores.", 'success');
@@ -1538,12 +1700,13 @@
         nextRoundBtn.onclick = () => {
             if(isHost && currentLobbyCode && lobbyState && lobbyState.gameState === 'roundOver') {
                 socket.emit('requestNextRound', { lobbyCode: currentLobbyCode });
-                nextRoundBtn.style.display = 'none'; // Hide after click
+                nextRoundBtn.style.display = 'none'; 
             }
         };
 
         socket.on('gameError', (message) => {
             addMessage(message, 'error');
+            hideLoader(); // Hide loader on error too
         });
         
         socket.on('gameMessage', (message) => {
@@ -1552,7 +1715,13 @@
 
         socket.on('disconnect', (reason) => {
             hideLoader();
-            addMessage(`Disconnected: ${reason}. You can try rejoining or starting a new game.`, 'error');
+            // Only show critical disconnect message if not intentionally leaving
+            if (screens.initial.classList.contains('active')) {
+                 // User is on initial screen, likely intentional or before joining
+            } else {
+                addMessage(`Disconnected: ${reason}. You might need to rejoin or start a new game.`, 'error');
+                showScreen('initial'); // Go back to initial screen on disconnect
+            }
         });
 
         // Initial setup

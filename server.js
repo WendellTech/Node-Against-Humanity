@@ -11,8 +11,12 @@ const io = socketIo(server);
 const PORT = process.env.PORT || 3000;
 const MAX_HAND_SIZE = 10;
 
-// --- CAHDeck Class (Modified for Node.js) ---
-// --- CAHDeck Class (Modified for Node.js - More Robust Hydration) ---
+// --- Configuration ---
+let config = {
+    allowSameNames: false,
+    roomsFunctionality: true // Default values
+};
+
 class CAHDeck {
     constructor() {
         this.deck = null;
@@ -28,14 +32,11 @@ class CAHDeck {
             return [];
         }
 
-        // --- MODIFICATION START ---
-        // Change from json.packs to json.metadata
         if (!json.metadata || typeof json.metadata !== 'object') {
             console.error("Error in _hydrateCompact: 'json.metadata' is missing or not a valid object. Loaded JSON structure might be incorrect. Expected a top-level 'metadata' object containing pack information.");
             console.log("Loaded JSON keys:", Object.keys(json));
             return [];
         }
-        // --- MODIFICATION END ---
 
         if (!json.white || !Array.isArray(json.white)) {
             console.error("Error in _hydrateCompact: 'json.white' (global white cards list) is missing or not a valid array.");
@@ -46,38 +47,30 @@ class CAHDeck {
             return [];
         }
 
-        // --- MODIFICATION START ---
-        // Iterate over the keys of json.metadata (which are pack IDs)
         const packIds = Object.keys(json.metadata);
         for (let i = 0; i < packIds.length; i++) {
             const packId = packIds[i];
             const packData = json.metadata[packId];
-            // --- MODIFICATION END ---
 
             if (!packData || typeof packData.name !== 'string' ||
                 !Array.isArray(packData.white) || !Array.isArray(packData.black)) {
-                // --- MODIFICATION START ---
-                // Adjusted warning message to reflect iterating through metadata
                 console.warn(`Skipping malformed pack data for packId '${packId}' in cards.json. Pack data:`, packData);
-                // --- MODIFICATION END ---
                 continue;
             }
 
             let hydratedPack = {
                 name: packData.name,
-                official: packData.official, // Assumed from common CAH JSON structures
-                description: packData.description, // Assumed
+                official: packData.official, 
+                description: packData.description,
                 white: [],
                 black: []
             };
             if (packData.icon) hydratedPack.icon = packData.icon;
 
-            // 'i' will be the index of the pack in the final hydratedPacks array.
-            // This is used for the 'pack' property in card objects.
             const currentPackIndexInHydratedArray = hydratedPacks.length;
 
 
-            hydratedPack.white = packData.white.map((cardIndex) => { // cardIndex is an index into json.white
+            hydratedPack.white = packData.white.map((cardIndex) => { 
                 if (typeof json.white[cardIndex] === 'undefined') {
                     console.warn(`Warning: White card index ${cardIndex} not found in global white cards for pack '${packData.name}'. Skipping card.`);
                     return null;
@@ -85,12 +78,12 @@ class CAHDeck {
                 return Object.assign(
                     {},
                     { text: json.white[cardIndex] },
-                    { pack: currentPackIndexInHydratedArray }, // Use the current pack's future index
+                    { pack: currentPackIndexInHydratedArray }, 
                     packData.icon ? { icon: packData.icon } : {}
                 );
             }).filter(card => card !== null);
 
-            hydratedPack.black = packData.black.map((cardIndex) => { // cardIndex is an index into json.black
+            hydratedPack.black = packData.black.map((cardIndex) => { 
                 if (typeof json.black[cardIndex] === 'undefined' || typeof json.black[cardIndex].text !== 'string' || typeof json.black[cardIndex].pick !== 'number') {
                     console.warn(`Warning: Black card index ${cardIndex} not found or malformed (missing text/pick) in global black cards for pack '${packData.name}'. Skipping card.`);
                     return null;
@@ -98,7 +91,7 @@ class CAHDeck {
                 return Object.assign(
                     {},
                     json.black[cardIndex],
-                    { pack: currentPackIndexInHydratedArray }, // Use the current pack's future index
+                    { pack: currentPackIndexInHydratedArray }, 
                     packData.icon ? { icon: packData.icon } : {}
                 );
             }).filter(card => card !== null);
@@ -191,11 +184,9 @@ class CAHDeck {
         return { white, black };
     }
 }
-// --- End CAHDeck Class ---
-// --- End CAHDeck Class ---
 
-let globalCAHDeck; // Will be loaded on server start
-const lobbies = {}; // { lobbyCode: lobbyObject }
+let globalCAHDeck;
+const lobbies = {}; 
 
 function generateLobbyCode() {
     let code;
@@ -223,7 +214,7 @@ function broadcastLobbyState(lobbyCode) {
     const publicLobbyState = {
         code: lobbyCode,
         players: lobby.players.map(p => ({ 
-            id: p.id,  // Include player IDs for czar identification
+            id: p.id,
             name: p.name, 
             score: p.score, 
             isCzar: p.id === lobby.czarId, 
@@ -231,16 +222,15 @@ function broadcastLobbyState(lobbyCode) {
         })),
         hostId: lobby.hostId,
         gameState: lobby.gameState,
-        settings: lobby.settings,
+        settings: lobby.settings, // includes isPrivate for host display if needed
         currentBlackCard: lobby.currentBlackCard,
-        // Key change: Always send the submissions in judging state for all players to see
         roundSubmissions: lobby.gameState === 'judging' ? lobby.roundSubmissions.map(sub => ({
             playerId: sub.playerId,
             playerName: sub.playerName,
             cards: sub.cards
         })) : null,
         roundWinnerInfo: lobby.roundWinnerInfo, 
-        czarId: lobby.czarId, // Send czar ID explicitly
+        czarId: lobby.czarId,
         czarName: lobby.czarId ? lobby.players.find(p => p.id === lobby.czarId)?.name : null
     };
     io.to(lobbyCode).emit('lobbyUpdate', publicLobbyState);
@@ -249,7 +239,7 @@ function broadcastLobbyState(lobbyCode) {
 function dealWhiteCards(lobby, player, count) {
     for (let i = 0; i < count; i++) {
         if (lobby.whiteDeck.length === 0) {
-            if (lobby.whiteDiscard.length === 0) break; // No more cards
+            if (lobby.whiteDiscard.length === 0) break; 
             lobby.whiteDeck = [...lobby.whiteDiscard];
             lobby.whiteDiscard = [];
             shuffleArray(lobby.whiteDeck);
@@ -269,11 +259,9 @@ function startNextRound(lobbyCode) {
     lobby.roundWinnerInfo = null;
     lobby.players.forEach(p => p.submittedCards = null);
 
-    // Rotate Czar
     const currentCzarIndex = lobby.players.findIndex(p => p.id === lobby.czarId);
     lobby.czarId = lobby.players[(currentCzarIndex + 1) % lobby.players.length].id;
 
-    // Deal new black card
     if (lobby.blackDeck.length === 0) {
         if (lobby.blackDiscard.length === 0) {
             io.to(lobbyCode).emit('gameOver', { message: "No more black cards!", players: lobby.players });
@@ -288,13 +276,11 @@ function startNextRound(lobbyCode) {
     if (lobby.currentBlackCard) lobby.blackDiscard.push(lobby.currentBlackCard);
     lobby.currentBlackCard = lobby.blackDeck.pop();
 
-    // Replenish hands
     lobby.players.forEach(player => {
         const cardsNeeded = MAX_HAND_SIZE - player.hand.length;
         if (cardsNeeded > 0) {
             dealWhiteCards(lobby, player, cardsNeeded);
         }
-        // Send individual hand updates
         io.to(player.id).emit('handUpdate', player.hand);
     });
 
@@ -304,12 +290,13 @@ function startNextRound(lobbyCode) {
 
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
+    socket.emit('serverConfig', config); // Send config to client on connect
 
     socket.on('getPackList', async (callback) => {
         if (globalCAHDeck) {
             callback(globalCAHDeck.listPacks());
         } else {
-            callback([]); // Or an error
+            callback([]);
         }
     });
 
@@ -319,11 +306,12 @@ io.on('connection', (socket) => {
             code: lobbyCode,
             players: [],
             hostId: socket.id,
-            gameState: 'waiting', // waiting, playing, judging, roundOver, gameOver
+            gameState: 'waiting',
             settings: {
                 scoreToWin: settings?.scoreToWin || 7,
-                maxPlayers: settings?.maxPlayers || 10, // Example default
-                selectedPackIndexes: settings?.selectedPackIndexes || [0] // Default to first pack
+                maxPlayers: settings?.maxPlayers || 10,
+                selectedPackIndexes: settings?.selectedPackIndexes || [0],
+                isPrivate: config.roomsFunctionality ? (settings?.isPrivate || false) : true
             },
             whiteDeck: [],
             blackDeck: [],
@@ -331,7 +319,7 @@ io.on('connection', (socket) => {
             blackDiscard: [],
             currentBlackCard: null,
             czarId: null,
-            roundSubmissions: [], // [{ playerId, playerName, cards: [cardObj1, cardObj2] }]
+            roundSubmissions: [],
             roundWinnerInfo: null
         };
         socket.join(lobbyCode);
@@ -340,7 +328,7 @@ io.on('connection', (socket) => {
         
         callback({ success: true, lobbyCode });
         broadcastLobbyState(lobbyCode);
-        console.log(`Lobby ${lobbyCode} created by ${playerName}`);
+        console.log(`Lobby ${lobbyCode} created by ${playerName}. Private: ${lobbies[lobbyCode].settings.isPrivate}`);
     });
 
     socket.on('joinLobby', ({ lobbyCode, playerName }, callback) => {
@@ -354,6 +342,10 @@ io.on('connection', (socket) => {
         if (lobby.gameState !== 'waiting') {
              return callback({ success: false, message: 'Game has already started.' });
         }
+        if (!config.allowSameNames && lobby.players.some(p => p.name.toLowerCase() === playerName.toLowerCase())) {
+            return callback({ success: false, message: 'Player name already taken in this lobby.' });
+        }
+
 
         socket.join(lobbyCode);
         const player = { id: socket.id, name: playerName, score: 0, hand: [], submittedCards: null };
@@ -361,14 +353,43 @@ io.on('connection', (socket) => {
         
         callback({ success: true, lobbyCode, settings: lobby.settings, packList: globalCAHDeck.listPacks() });
         broadcastLobbyState(lobbyCode);
-        // Send hand update separately for privacy
         io.to(socket.id).emit('handUpdate', player.hand); 
         console.log(`${playerName} joined lobby ${lobbyCode}`);
+    });
+    
+    socket.on('getPublicLobbies', (callback) => {
+        if (!config.roomsFunctionality) {
+            console.log('Room functionality disabled, returning empty list for getPublicLobbies.');
+            return callback([]);
+        }
+        const publicLobbies = Object.values(lobbies)
+            .filter(lobby =>
+                !lobby.settings.isPrivate &&
+                lobby.gameState === 'waiting' &&
+                lobby.players.length < lobby.settings.maxPlayers
+            )
+            .map(lobby => ({
+                code: lobby.code,
+                hostName: lobby.players.find(p => p.id === lobby.hostId)?.name || 'Unknown Host',
+                playerCount: lobby.players.length,
+                settings: { 
+                    maxPlayers: lobby.settings.maxPlayers,
+                    scoreToWin: lobby.settings.scoreToWin,
+                    selectedPackNames: lobby.settings.selectedPackIndexes
+                        .map(idx => globalCAHDeck.listPacks().find(p => p.id === idx)?.name || `Pack ${idx}`)
+                }
+            }));
+        callback(publicLobbies);
     });
 
     socket.on('updateSettings', ({ lobbyCode, settings }) => {
         const lobby = lobbies[lobbyCode];
         if (lobby && lobby.hostId === socket.id && lobby.gameState === 'waiting') {
+            // Make sure isPrivate can be updated if roomsFunctionality is on
+            if (config.roomsFunctionality && typeof settings.isPrivate === 'boolean') {
+                 lobby.settings.isPrivate = settings.isPrivate;
+            }
+            // other settings can be updated as before
             lobby.settings = { ...lobby.settings, ...settings };
             broadcastLobbyState(lobbyCode);
         }
@@ -377,12 +398,11 @@ io.on('connection', (socket) => {
     socket.on('startGame', ({ lobbyCode }) => {
         const lobby = lobbies[lobbyCode];
         if (!lobby || lobby.hostId !== socket.id || lobby.gameState !== 'waiting') return;
-        if (lobby.players.length < 3) { // Min 3 players
+        if (lobby.players.length < 3) { 
             io.to(socket.id).emit('gameError', 'Need at least 3 players to start.');
             return;
         }
 
-        // Initialize deck for this game
         const gameCards = globalCAHDeck.getPacks(lobby.settings.selectedPackIndexes);
         lobby.whiteDeck = [...gameCards.white];
         lobby.blackDeck = [...gameCards.black];
@@ -391,16 +411,15 @@ io.on('connection', (socket) => {
         lobby.whiteDiscard = [];
         lobby.blackDiscard = [];
 
-        // Initial deal and Czar selection
         lobby.players.forEach(player => {
-            player.score = 0; // Reset scores
-            player.hand = []; // Clear hands
+            player.score = 0; 
+            player.hand = []; 
             dealWhiteCards(lobby, player, MAX_HAND_SIZE);
             io.to(player.id).emit('handUpdate', player.hand);
         });
         
-        lobby.czarId = lobby.players[0].id; // First player is Czar
-        startNextRound(lobbyCode); // This will set gameState, deal black card, etc.
+        lobby.czarId = lobby.players[0].id; 
+        startNextRound(lobbyCode); 
         console.log(`Game started in lobby ${lobbyCode}`);
     });
 
@@ -422,28 +441,24 @@ io.on('connection', (socket) => {
             const cardIndex = player.hand.findIndex(c => c.id === cardId);
             if (cardIndex === -1) {
                 io.to(socket.id).emit('gameError', 'Invalid card submitted.');
-                return; // Invalid card
+                return; 
             }
             submittedCardsObjects.push(player.hand[cardIndex]);
         }
 
-        // Valid submission
         player.submittedCards = submittedCardsObjects;
-        // Remove cards from hand
         player.hand = player.hand.filter(card => !cardIds.includes(card.id));
         io.to(socket.id).emit('handUpdate', player.hand);
 
-        // Add to lobby submissions (anonymized for Czar until reveal, but store player for scoring)
         lobby.roundSubmissions.push({ playerId: player.id, playerName: player.name, cards: submittedCardsObjects });
         
-        broadcastLobbyState(lobbyCode); // Update everyone on who has submitted
+        broadcastLobbyState(lobbyCode); 
 
-        // Check if all non-czars submitted
         const nonCzars = lobby.players.filter(p => p.id !== lobby.czarId);
         if (lobby.roundSubmissions.length === nonCzars.length) {
             lobby.gameState = 'judging';
-            shuffleArray(lobby.roundSubmissions); // Shuffle submissions before sending to Czar
-            broadcastLobbyState(lobbyCode); // This will now include roundSubmissions
+            shuffleArray(lobby.roundSubmissions); 
+            broadcastLobbyState(lobbyCode); 
         }
     });
 
@@ -464,7 +479,6 @@ io.on('connection', (socket) => {
             blackCardText: lobby.currentBlackCard.text
         };
         
-        // Discard submitted white cards
         lobby.roundSubmissions.forEach(sub => {
             lobby.whiteDiscard.push(...sub.cards);
         });
@@ -476,18 +490,16 @@ io.on('connection', (socket) => {
         } else {
             lobby.gameState = 'roundOver';
             broadcastLobbyState(lobbyCode);
-            // Optionally, add a short delay before starting next round
             setTimeout(() => {
-                if (lobbies[lobbyCode] && lobbies[lobbyCode].gameState !== 'gameOver') { // Check if game didn't end for other reasons
+                if (lobbies[lobbyCode] && lobbies[lobbyCode].gameState === 'roundOver' && lobbies[lobbyCode].gameState !== 'gameOver') { 
                     startNextRound(lobbyCode);
                 }
-            }, 5000); // 5 second delay
+            }, 5000); 
         }
     });
     
     socket.on('requestNextRound', ({ lobbyCode }) => {
         const lobby = lobbies[lobbyCode];
-         // Only host or if game is stuck in roundOver for some reason (e.g. auto-next failed)
         if (lobby && (lobby.hostId === socket.id || lobby.gameState === 'roundOver') && lobby.gameState !== 'gameOver') {
             startNextRound(lobbyCode);
         }
@@ -508,17 +520,14 @@ io.on('connection', (socket) => {
                     console.log(`Lobby ${lobbyCode} is empty, deleting.`);
                     delete lobbies[lobbyCode];
                 } else {
-                    // If host disconnected, assign a new host
                     if (lobby.hostId === socket.id) {
                         lobby.hostId = lobby.players[0].id;
                         console.log(`New host for ${lobbyCode} is ${lobby.players[0].name}`);
                     }
-                    // If Czar disconnected during game, may need to pick new Czar or end round
                     if (lobby.gameState !== 'waiting' && lobby.gameState !== 'gameOver') {
                         if (lobby.czarId === socket.id) {
-                            // End current round, start new one with new czar
                             io.to(lobbyCode).emit('gameMessage', `${disconnectedPlayerName} (Czar) disconnected. Starting new round.`);
-                            startNextRound(lobbyCode); // This will pick a new Czar
+                            startNextRound(lobbyCode); 
                         } else if (lobby.players.length < 3 && lobby.gameState !== 'waiting') {
                             lobby.gameState = 'gameOver';
                              io.to(lobbyCode).emit('gameOver', { message: "Not enough players to continue.", players: lobby.players });
@@ -532,27 +541,41 @@ io.on('connection', (socket) => {
     });
 });
 
-// Serve static files from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Fallback to index.html for SPA-like behavior if needed, or just serve it directly
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+async function loadConfig() {
+    try {
+        const configPath = path.join(__dirname, 'config.json');
+        const configFile = await fs.readFile(configPath, 'utf-8');
+        const loadedConfig = JSON.parse(configFile);
+        config = { ...config, ...loadedConfig }; 
+        console.log("Configuration loaded:", config);
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            console.warn("config.json not found, creating with default values.");
+            await fs.writeFile(path.join(__dirname, 'config.json'), JSON.stringify(config, null, 2));
+        } else {
+            console.error("Error loading config.json, using default values:", error);
+        }
+    }
+}
 
 async function main() {
     try {
+        await loadConfig(); // Load config first
+
         globalCAHDeck = await CAHDeck.fromCompact(path.join(__dirname, 'cards.json'));
         console.log("Card deck loaded successfully.");
         const packs = globalCAHDeck.listPacks();
         if (!packs || packs.length === 0) {
             console.error("No packs found in cards.json or deck not loaded correctly! Please check cards.json structure.");
-            // process.exit(1); // Exit if no cards
         } else {
             console.log(`Found ${packs.length} pack(s).`);
         }
-
 
         server.listen(PORT, () => {
             console.log(`Server listening on port ${PORT}`);
